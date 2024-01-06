@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Titan - Image Compressor</title>
+    <script src="https://cdn.jsdelivr.net/npm/compressorjs@1.0.6/dist/compressor.min.js"></script>
+    <style>
+      body {
+        display: flex;
+        justify-content: flex-start;
+        align-items: flex-start;
+        height: 100vh;
+        width: 100vw;
+        margin: 0;
+        font-family: monospace;
+        align-content: flex-start;
+        overflow: hidden;
+      }
+
+      div#app {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-content: center;
+        justify-content: center;
+        align-items: center;
+        height: calc(100% - 48px);
+        width: calc(100% - 48px);
+        padding: 24px;
+        overflow-y: hidden;
+        overflow-x: hidden;
+      }
+
+      #image-container {
+        display: flex;
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+        border: 2px dashed #ccc;
+        padding: 24px;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-content: center;
+        justify-content: flex-start;
+        align-items: center;
+      }
+
+      .drag-drop-area {
+        width: calc(100% - 48px);
+        padding: 24px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+      }
+
+      #image-preview,
+      #compressed-image {
+        display: none;
+        max-width: 100%;
+        height: auto;
+        border: 1px solid lightgray;
+        margin: 24px 0;
+      }
+
+      #file-size-info {
+        line-height: 150%;
+        margin-bottom: 24px;
+      }
+
+      button,
+      .button {
+        padding: 16px 24px;
+        cursor: pointer;
+        border: 1px solid darkgray;
+        background: lightgray;
+      }
+      a.button.pay {
+        margin-top: 24px;
+      }
+
+      .limit-modal-inner {
+        display: flex;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-content: center;
+        justify-content: flex-start;
+        align-items: center;
+      }
+
+      @media screen and (max-width: 768px) {
+        div#app {
+          overflow-y: scroll;
+        }
+        #image-container {
+          max-width: calc(100% - 48px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <h1 style="margin-bottom: 24px">Image Compressor</h1>
+      <div id="image-container">
+        <div class="drag-drop-area">Drag and drop your image here or click to select</div>
+        <input type="file" id="image-input" accept="image/*" style="display: none" />
+        <img id="image-preview" src="" alt="Image Preview" />
+        <img id="compressed-image" src="" alt="Compressed Image" />
+        <div id="file-size-info" style="display: none"></div>
+        <button id="compress-button" style="display: none">Compress Image</button>
+        <button id="save-button" style="display: none">Save Compressed Image</button>
+      </div>
+    </div>
+
+    <!-- Modal Popup HTML -->
+    <div
+      id="limit-modal"
+      style="
+        display: none;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div class="limit-modal-inner" style="background-color: white; padding: 20px; border-radius: 5px; text-align: center">
+        <p>Enjoying our image optimizer?</p>
+        <p>Get unlimited optimizations for only $7!</p>
+        <a href="https://buy.stripe.com/8wMaI6er6gYv9he9AQ" class="button pay" target="_blank">pay $7 to unlock unlimited optimizations for life!</a>
+      </div>
+    </div>
+
+    <script>
+      let imageCount = parseInt(localStorage.getItem('imageCount')) || 0;
+      const dragDropArea = document.querySelector('.drag-drop-area');
+      const imageInput = document.getElementById('image-input');
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPaid = urlParams.get('paid') === 'true';
+
+      function checkLimitReached() {
+        if (imageCount >= 10 && !isPaid) {
+          document.getElementById('limit-modal').style.display = 'flex';
+          return true;
+        }
+      }
+
+      const compressImage = async (imageFile) => {
+        const fileExtension = imageFile.type.split('/').pop().toLowerCase().trim();
+        console.log(fileExtension);
+        let compressionOptions = {
+          quality: 0.6, // Default quality for images
+          convertSize: 5000000, // Convert to JPEG if size > 5MB
+        };
+
+        if (fileExtension === 'png' || 'jpeg' || 'jpg' || 'gif' || 'webp') {
+          compressionOptions = {
+            ...compressionOptions,
+            mimeType: `image/jpeg`,
+            quality: 0.5,
+          };
+        }
+
+        return new Promise((resolve, reject) => {
+          new Compressor(imageFile, {
+            ...compressionOptions,
+            success(result) {
+              resolve(result);
+            },
+            error(err) {
+              reject(err);
+            },
+          });
+        });
+      };
+
+      const getFileExtension = (filename) => {
+        return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2);
+      };
+
+      const displayFileSize = (originalFile, compressedFile) => {
+        const originalSize = originalFile.size / 1024; // size in KB
+        const compressedSize = compressedFile.size / 1024; // size in KB
+        const compressionPercentage = 100 - (compressedSize / originalSize) * 100;
+        const message = compressedFile
+          ? `Original size: ${originalSize.toFixed(2)} KB\n\nCompressed size: ${compressedSize.toFixed(
+              2
+            )} KB\n\nCompressed: ${compressionPercentage.toFixed(2)}%`
+          : '';
+        document.getElementById('file-size-info').innerText = message;
+      };
+
+      dragDropArea.addEventListener('click', () => {
+        if (checkLimitReached()) {
+          return;
+        }
+        imageInput.click();
+      });
+
+      dragDropArea.addEventListener('dragover', (event) => {
+        if (checkLimitReached()) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      });
+
+      dragDropArea.addEventListener('drop', (event) => {
+        if (checkLimitReached()) {
+          return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        const files = event.dataTransfer.files;
+        if (files.length) {
+          imageInput.files = files;
+          imageInput.dispatchEvent(new Event('change'));
+        }
+      });
+
+      document.addEventListener('DOMContentLoaded', () => {
+        checkLimitReached();
+
+        const imageInput = document.getElementById('image-input');
+        const compressButton = document.getElementById('compress-button');
+        const saveButton = document.getElementById('save-button');
+        const imagePreview = document.getElementById('image-preview');
+        const compressedImage = document.getElementById('compressed-image');
+        const fileSizeInfo = document.getElementById('file-size-info');
+
+        imageInput.addEventListener('change', () => {
+          if (checkLimitReached()) {
+            return;
+          }
+          const imageFile = imageInput.files[0];
+          if (imageFile) {
+            imagePreview.src = URL.createObjectURL(imageFile); // Display image preview
+            imagePreview.style.display = 'block';
+            compressButton.style.display = 'block';
+            compressedImage.style.display = 'none';
+            saveButton.style.display = 'none';
+            fileSizeInfo.style.display = 'none';
+          }
+        });
+
+        compressButton.addEventListener('click', async () => {
+          if (checkLimitReached()) {
+            return;
+          }
+          const imageFile = imageInput.files[0];
+          if (imageFile) {
+            try {
+              const compressedImageData = await compressImage(imageFile);
+              compressedImage.src = URL.createObjectURL(compressedImageData);
+              compressedImage.style.display = 'block';
+              saveButton.style.display = 'block';
+              fileSizeInfo.style.display = 'block';
+              imagePreview.style.display = 'none';
+              compressButton.style.display = 'none';
+              displayFileSize(imageFile, compressedImageData);
+              imageCount++;
+              localStorage.setItem('imageCount', imageCount.toString());
+              checkLimitReached();
+            } catch (error) {
+              console.error('Compression error:', error);
+            }
+          }
+        });
+
+        saveButton.addEventListener('click', () => {
+          if (checkLimitReached()) {
+            return;
+          }
+          const imageSrc = compressedImage.getAttribute('src');
+          const link = document.createElement('a');
+          link.href = imageSrc;
+
+          const originalFileName = imageInput.files[0].name;
+          const originalFileExtension = getFileExtension(originalFileName);
+
+          // Extract the file name without its extension
+          const fileNameWithoutExtension = originalFileName.replace(/\.[^/.]+$/, '');
+
+          // Save with the format {original-name}-min.{original-file-type}
+          link.download = `${fileNameWithoutExtension}-minified.${originalFileExtension}`;
+
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      });
+    </script>
+  </body>
+</html>
