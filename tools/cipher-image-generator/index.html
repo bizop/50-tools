@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <h2>Create Encoded Image</h2>
+    <p>
+      Note: Cipher key can contain English letters (both uppercase and lowercase) and numbers only. (no apostrophes, spaces, underlines, dashes, or
+      special characters)
+      <br />
+      Note: Message can contain English letters (both uppercase and lowercase), numbers, and spaces only. (no apostrophes, underlines, dashes, or
+      special characters)
+    </p>
+    <input type="text" id="inputKey" placeholder="Create cipher key" autocomplete="off" />
+    <input type="text" id="inputPhrase" placeholder="Enter message to encode" autocomplete="off" />
+    <button onclick="process()">Encode and Download Image</button>
+    <div style="height: 20px"></div>
+    <hr />
+    <h2>Decode Image</h2>
+    <input type="text" id="decodeKey" placeholder="Enter cipher key to decode" autocomplete="off" />
+    <input type="file" id="uploadImage" onchange="loadImage()" />
+    <p id="decodedMessage"></p>
+
+    <script>
+      function createCipherAlphabet(key) {
+        const baseAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let cipherAlphabet = '';
+        for (const letter of key) {
+          if (!cipherAlphabet.includes(letter)) {
+            cipherAlphabet += letter;
+          }
+        }
+        for (const letter of baseAlphabet) {
+          if (!cipherAlphabet.includes(letter)) {
+            cipherAlphabet += letter;
+          }
+        }
+        console.log(cipherAlphabet);
+        return cipherAlphabet;
+      }
+
+      function encode(secretMessage, cipherAlphabet) {
+        const baseAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let encodedMessage = '';
+        for (const letter of secretMessage) {
+          if (baseAlphabet.includes(letter)) {
+            const index = baseAlphabet.indexOf(letter);
+            encodedMessage += cipherAlphabet[index];
+          } else {
+            encodedMessage += letter;
+          }
+        }
+        console.log(encodedMessage);
+        return encodedMessage;
+      }
+
+      function decode(encodedMessage, cipherAlphabet) {
+        const baseAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let decodedMessage = '';
+        for (const letter of encodedMessage) {
+          if (cipherAlphabet.includes(letter)) {
+            const index = cipherAlphabet.indexOf(letter);
+            decodedMessage += baseAlphabet[index];
+          } else {
+            decodedMessage += letter;
+          }
+        }
+        return decodedMessage;
+      }
+
+      function process() {
+        const key = document.getElementById('inputKey').value;
+        const cipherAlphabet = createCipherAlphabet(key);
+
+        const secretMessage = document.getElementById('inputPhrase').value;
+        const encodedMessage = encode(secretMessage, cipherAlphabet);
+
+        createImage(encodedMessage);
+      }
+
+      function codeToRgb(charCode) {
+        const r = (charCode % 7) * 36;
+        const g = (Math.floor(charCode / 7) % 7) * 36;
+        const b = Math.floor(charCode / 49) * 36;
+
+        return [r, g, b];
+      }
+
+      function rgbToCharCode(r, g, b) {
+        return r / 36 + (g / 36) * 7 + (b / 36) * 49;
+      }
+
+      function createImage(encodedMessage) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const squareSize = 10;
+
+        const sideLength = Math.ceil(Math.sqrt(encodedMessage.length));
+        canvas.width = squareSize * sideLength;
+        canvas.height = squareSize * sideLength;
+
+        let x = 0;
+        let y = 0;
+        for (let i = 0; i < encodedMessage.length; i++) {
+          const charCode = encodedMessage[i] === ' ' ? 124 : encodedMessage[i].charCodeAt(0);
+          const [r, g, b] = charCode === 243 ? [255, 255, 255] : codeToRgb(charCode);
+
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(x * squareSize, y * squareSize, squareSize, squareSize);
+
+          x++;
+          if (x === sideLength) {
+            x = 0;
+            y++;
+          }
+        }
+
+        const dataURL = canvas.toDataURL('image/png');
+        downloadImage(dataURL, 'encodedImage.png');
+      }
+
+      function downloadImage(dataUrl, fileName) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = fileName;
+        link.click();
+      }
+
+      function loadImage() {
+        const imageFile = document.getElementById('uploadImage').files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.src = e.target.result;
+          img.onload = () => {
+            decodeImage(img);
+          };
+        };
+        reader.readAsDataURL(imageFile);
+      }
+
+      function decodeImage(img) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        const key = document.getElementById('decodeKey').value;
+        const cipherAlphabet = createCipherAlphabet(key);
+
+        let encodedMessage = '';
+        const squareSize = 10;
+        const sideLength = Math.ceil(Math.sqrt((canvas.width * canvas.height) / (squareSize * squareSize)));
+
+        let x = 0;
+        let y = 0;
+        for (let i = 0; i < (canvas.width * canvas.height) / (squareSize * squareSize); i++) {
+          const pixelColor = ctx.getImageData(x * squareSize, y * squareSize, 1, 1).data;
+          const r = pixelColor[0] / 36;
+          const g = pixelColor[1] / 36;
+          const b = pixelColor[2] / 36;
+
+          if (r === 7 && g === 7 && b === 7) {
+            encodedMessage += ' ';
+          } else {
+            const charIndex = rgbToCharCode(pixelColor[0], pixelColor[1], pixelColor[2]);
+            if (charIndex === 124) {
+              encodedMessage += ' ';
+            } else {
+              encodedMessage += String.fromCharCode(charIndex);
+            }
+          }
+
+          x++;
+          if (x === sideLength) {
+            x = 0;
+            y++;
+          }
+        }
+
+        const decodedMessage = decode(encodedMessage, cipherAlphabet);
+        document.getElementById('decodedMessage').innerHTML = `Decoded phrase: ${decodedMessage}`;
+      }
+    </script>
+  </body>
+</html>
